@@ -71,9 +71,10 @@ class H3D_OT_LoginWithCookies(Operator):
 
         session = new_session()
         session.cookies.update({
-            "hy_token": token,
+            "hunyuan_token": token,
+            "hunyuan_user": userid,
+            "hunyuan_source": source,
             "hy_user": userid,
-            "hy_source": source
         })
         self.report({'INFO'}, "Session created with cookies")
         print("Session created with cookies")

@@ -3,6 +3,7 @@
 *.old
 *.dev.py
 *.old.py
+.cursor/
 
 .vscode/
 .idea/

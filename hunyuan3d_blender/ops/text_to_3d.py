@@ -34,7 +34,7 @@ def generation_timer():
         if len(generation_queue) > 0:
             data = generation_queue.popleft()
             if creation_id := generate_3d_model(**data):
-                currently_processing_count -= 1
+                currently_processing_count += 1
                 h3d_scn = H3D_Data.SCN()
                 running_generations[creation_id] = h3d_scn.new_generation(creation_id)
             else:
@@ -57,6 +57,7 @@ def generation_timer():
             currently_processing_count -= 1
         if generation.status == 'fail':
             invalid_generations.append(creation_id)
+            currently_processing_count -= 1
 
     for creation_id in completed_generations:
         running_generations.pop(creation_id)
