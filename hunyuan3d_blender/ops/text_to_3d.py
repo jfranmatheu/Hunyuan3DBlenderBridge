@@ -1,8 +1,11 @@
+import os
+import tempfile
+
 import bpy
 from bpy.types import Operator
 from bpy.props import StringProperty, IntProperty, BoolProperty
 from collections import deque
-from ..api.h3d import generate_3d_model, get_creation_details
+from ..api.h3d import generate_3d_model, generate_3d_model_from_image, get_creation_details
 from ..utils import TimerManager
 from ..data import H3D_Data
 from ..data.scn import GenerationDetails
@@ -33,7 +36,22 @@ def generation_timer():
     if currently_processing_count < 3:
         if len(generation_queue) > 0:
             data = generation_queue.popleft()
-            if creation_id := generate_3d_model(**data):
+            generation_type = data.pop("generation_type", "TEXT_TO_3D")
+            temp_filepath = data.pop("temp_filepath", "")
+            creation_id = None
+            try:
+                if generation_type == "IMAGE_TO_3D":
+                    creation_id = generate_3d_model_from_image(**data)
+                else:
+                    creation_id = generate_3d_model(**data)
+            finally:
+                if temp_filepath:
+                    try:
+                        os.remove(temp_filepath)
+                    except OSError:
+                        pass
+
+            if creation_id:
                 currently_processing_count += 1
                 h3d_scn = H3D_Data.SCN()
                 running_generations[creation_id] = h3d_scn.new_generation(creation_id)
@@ -83,21 +101,83 @@ class H3D_OT_TextTo3D(Operator):
     use_pbr: BoolProperty(name="PBR", default=True)
 
     def execute(self, context):
-        if self.count == 0:
-            return {'CANCELLED'}
-        prompt: str = self.prompt
-        prompt = prompt.strip()
-        if prompt == "":
-            return {'CANCELLED'}
-        self.add_to_queue({
-            "prompt": prompt,
-            "title": prompt,
-            "style": "" if self.style == 'DEFAULT' else self.style,
-            "count": self.count,
-            "enable_pbr": self.use_pbr,
-            "enable_low_poly": False
-        })
+        wm_h3d = H3D_Data.WM(context)
+        if wm_h3d.h3d_generation_type == 'IMAGE_TO_3D':
+            image = wm_h3d.h3d_generation_image
+            image_filepath, temp_filepath, cache_keys = self.get_image_filepath(image)
+            if not image_filepath:
+                self.report({'ERROR'}, "Select an image with a valid file path")
+                return {'CANCELLED'}
+            self.add_to_queue({
+                "generation_type": "IMAGE_TO_3D",
+                "image_path": image_filepath,
+                "temp_filepath": temp_filepath,
+                "cache_keys": cache_keys,
+                "title": image.name if image else "",
+                "style": "",
+                "count": 1,
+                "enable_pbr": self.use_pbr,
+                "enable_low_poly": False
+            })
+        else:
+            if self.count == 0:
+                return {'CANCELLED'}
+            prompt: str = self.prompt
+            prompt = prompt.strip()
+            if prompt == "":
+                return {'CANCELLED'}
+            self.add_to_queue({
+                "generation_type": "TEXT_TO_3D",
+                "prompt": prompt,
+                "title": prompt,
+                "style": "" if self.style == 'DEFAULT' else self.style,
+                "count": self.count,
+                "enable_pbr": self.use_pbr,
+                "enable_low_poly": False
+            })
         return {'FINISHED'}
+
+    def get_image_filepath(self, image: bpy.types.Image | None) -> tuple[str, str, list[str]]:
+        if image is None:
+            return "", "", []
+
+        cache_keys = [f"image-name:{image.name}"]
+        if image.filepath:
+            cache_keys.append(f"image-path:{bpy.path.abspath(image.filepath)}")
+
+        image_is_dirty = getattr(image, "is_dirty", False)
+        image_is_packed = getattr(image, "packed_file", None) is not None
+
+        if image.filepath and not image_is_dirty and not image_is_packed:
+            filepath = bpy.path.abspath(image.filepath)
+            if os.path.isfile(filepath):
+                return filepath, "", cache_keys
+
+        temp_file = tempfile.NamedTemporaryFile(
+            prefix="hunyuan3d_image_",
+            suffix=".png",
+            delete=False,
+        )
+        temp_filepath = temp_file.name
+        temp_file.close()
+
+        original_filepath_raw = image.filepath_raw
+        original_file_format = image.file_format
+        try:
+            image.filepath_raw = temp_filepath
+            image.file_format = 'PNG'
+            image.save()
+            return temp_filepath, temp_filepath, cache_keys
+        except Exception as e:
+            print(f"Failed to save Blender image for upload: {e}")
+            try:
+                os.remove(temp_filepath)
+            except OSError:
+                pass
+            return "", "", []
+        finally:
+            image.filepath_raw = original_filepath_raw
+            image.file_format = original_file_format
 
     def add_to_queue(self, data: dict):
         generation_queue.append(data)

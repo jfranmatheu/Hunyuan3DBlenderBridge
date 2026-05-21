@@ -74,9 +74,12 @@ class H3D_PT_Panel(Panel):
             generation_box.prop(wm_h3d, "h3d_generation_count", slider=True)
         elif wm_h3d.h3d_generation_type == 'IMAGE_TO_3D':
             generation_box.prop(wm_h3d, "h3d_generation_image")
-            generation_box.prop(wm_h3d, 'h3d_generation_use_pbr')
+            generation_box.prop(wm_h3d, 'h3d_generation_use_pbr', text='PBR', toggle=True)
 
-        op = generation_box.operator("h3d.text_to_3d")
+        op = generation_box.operator(
+            "h3d.text_to_3d",
+            text="Generate Image to 3D" if wm_h3d.h3d_generation_type == 'IMAGE_TO_3D' else "Generate Text to 3D",
+        )
         op.prompt = wm_h3d.h3d_generation_prompt
         op.style = wm_h3d.h3d_generation_style
         op.count = wm_h3d.h3d_generation_count

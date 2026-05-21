@@ -2,10 +2,12 @@ import uuid
 
 import requests
 
+from ..image_upload import upload_image
 from ..session import get_session
 from .sign import signed_url
 
-DEFAULT_MODEL_TYPE = "text2ModelV3.1"
+DEFAULT_TEXT_MODEL_TYPE = "text2ModelV3.1"
+DEFAULT_IMAGE_MODEL_TYPE = "image2ModelV3.1"
 DEFAULT_FACE_COUNT = 1_500_000
 DEFAULT_SCENE_TYPE = "playGround3D-2.0"
 GENERATIONS_URL = "https://3d.hunyuan.tencent.com/api/3d/creations/generations"
@@ -39,12 +41,10 @@ def generate_3d_model(
     enable_low_poly: bool = False,
     *,
     scene_type: str = DEFAULT_SCENE_TYPE,
-    model_type: str = DEFAULT_MODEL_TYPE,
+    model_type: str = DEFAULT_TEXT_MODEL_TYPE,
     face_count: int = DEFAULT_FACE_COUNT,
 ) -> str | None:
     """Send a text-to-3D generation request to the Hunyuan 3D API."""
-    session = get_session()
-
     payload = {
         "prompt": prompt,
         "title": title,
@@ -57,6 +57,45 @@ def generate_3d_model(
         "enableLowPoly": enable_low_poly,
     }
 
+    return _post_generation_payload(payload)
+
+
+def generate_3d_model_from_image(
+    image_path: str,
+    title: str = "",
+    style: str = "",
+    count: int = 1,
+    enable_pbr: bool = True,
+    enable_low_poly: bool = False,
+    cache_keys: list[str] | None = None,
+    *,
+    scene_type: str = DEFAULT_SCENE_TYPE,
+    model_type: str = DEFAULT_IMAGE_MODEL_TYPE,
+    face_count: int = DEFAULT_FACE_COUNT,
+) -> str | None:
+    """Upload an image and send an image-to-3D generation request."""
+    image_url = upload_image(image_path, cache_keys=cache_keys)
+    if not image_url:
+        print("Failed to upload image for 3D model generation")
+        return None
+
+    payload = {
+        "sceneType": scene_type,
+        "count": count,
+        "modelType": model_type,
+        "title": title,
+        "style": style,
+        "imageList": [image_url],
+        "enable_pbr": enable_pbr,
+        "enableLowPoly": enable_low_poly,
+        "faceCount": face_count,
+    }
+
+    return _post_generation_payload(payload)
+
+
+def _post_generation_payload(payload: dict) -> str | None:
+    session = get_session()
     url = signed_url(GENERATIONS_URL)
     headers = _build_headers()
 
