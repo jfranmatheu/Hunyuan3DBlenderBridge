@@ -70,7 +70,7 @@ wheels = [
 # For longer explanations use the documentation or detail page.
 #
 [permissions]
-network = "Pyppeteer needs to download Chromium browser components on first run"
+network = "To access Hunyuan3D API"
 # files = "Import/export FBX from/to disk" # Example
 # clipboard = "Copy and paste bone transforms" # Example
 
